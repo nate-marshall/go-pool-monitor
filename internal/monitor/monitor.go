@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,11 @@ var (
 	lastPHValue   string
 	lastRPMValue  int
 )
+
+// Struct to unmarshal the RPM payload if it's in JSON format
+type RPMPayload struct {
+	RPM int `json:"rpm"`
+}
 
 func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 	topic := msg.Topic()
@@ -41,8 +47,14 @@ func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 		logger.Debug("Received RPM message", "payload", payload) // Log the raw RPM payload
 		rpmValue, err := strconv.Atoi(strings.TrimSpace(payload))
 		if err != nil {
-			logger.Error("Error parsing RPM value", "error", err, "payload", payload)
-			return
+			// Try parsing as JSON if the plain int parsing fails
+			var rpmPayload RPMPayload
+			err = json.Unmarshal([]byte(payload), &rpmPayload)
+			if err != nil {
+				logger.Error("Error parsing RPM value", "error", err, "payload", payload)
+				return
+			}
+			rpmValue = rpmPayload.RPM
 		}
 		lastRPMValue = rpmValue
 		logger.Debug("Updated RPM value", "rpm", rpmValue)
