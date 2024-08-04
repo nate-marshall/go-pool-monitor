@@ -38,9 +38,10 @@ func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 			lastPHValue = payload
 		}
 	case config.RPMTopic:
+		logger.Debug("Received RPM message", "payload", payload) // Log the raw RPM payload
 		rpmValue, err := strconv.Atoi(strings.TrimSpace(payload))
 		if err != nil {
-			logger.Error("Error parsing RPM value", "error", err)
+			logger.Error("Error parsing RPM value", "error", err, "payload", payload)
 			return
 		}
 		lastRPMValue = rpmValue
