@@ -10,14 +10,19 @@ import (
 	"pool-monitor/pkg/logger"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/rs/zerolog"
 )
 
 var (
-	lastORPChange time.Time
-	lastPHChange  time.Time
-	lastORPValue  string
-	lastPHValue   string
-	lastRPMValue  int
+	lastORPChange    time.Time
+	lastPHChange     time.Time
+	lastORPValue     string
+	lastPHValue      string
+	lastRPMValue     int
+	lastORPAlertTime time.Time
+	lastPHAlertTime  time.Time
+	alertInterval    = config.AlertInterval
+	throttleDuration = time.Minute
 )
 
 // Struct to unmarshal the RPM payload
@@ -74,19 +79,28 @@ func MonitorLevels(ctx context.Context, client MQTT.Client) {
 			logger.Info("Shutting down monitor...")
 			return
 		case <-ticker.C:
-			if lastRPMValue == 0 {
-				logger.Warn("Pool pump is not running")
-			} else {
-				logger.Debug("RPM status checked", "rpm", lastRPMValue)
+			currentTime := time.Now()
+
+			// Check ORP level
+			if currentTime.Sub(lastORPChange) > alertInterval {
+				if currentTime.Sub(lastORPAlertTime) > throttleDuration {
+					logger.Debug("ORP level has not changed for the alert interval")
+					if logger.GetLevel() == zerolog.DebugLevel {
+						alert.SendAlert("ORP level has not changed for the alert interval")
+					}
+					lastORPAlertTime = currentTime
+				}
 			}
 
-			if time.Since(lastORPChange) > config.AlertInterval {
-				logger.Warn("ORP level has not changed for the alert interval")
-				alert.SendAlert("ORP level has not changed for the alert interval")
-			}
-			if time.Since(lastPHChange) > config.AlertInterval {
-				logger.Warn("pH level has not changed for the alert interval")
-				alert.SendAlert("pH level has not changed for the alert interval")
+			// Check pH level
+			if currentTime.Sub(lastPHChange) > alertInterval {
+				if currentTime.Sub(lastPHAlertTime) > throttleDuration {
+					logger.Debug("pH level has not changed for the alert interval")
+					if logger.GetLevel() == zerolog.DebugLevel {
+						alert.SendAlert("pH level has not changed for the alert interval")
+					}
+					lastPHAlertTime = currentTime
+				}
 			}
 		}
 	}

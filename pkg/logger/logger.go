@@ -30,6 +30,10 @@ func Init() {
 	log = zerolog.New(os.Stdout).With().Timestamp().Logger()
 }
 
+func GetLevel() zerolog.Level {
+	return zerolog.GlobalLevel()
+}
+
 func Debug(msg string, fields ...interface{}) {
 	event := log.Debug()
 	for i := 0; i < len(fields); i += 2 {
