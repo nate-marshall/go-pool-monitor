@@ -1,0 +1,31 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poolmonitor
+  labels:
+    app: poolmonitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: poolmonitor
+  template:
+    metadata:
+      labels:
+        app: poolmonitor
+    spec:
+      containers:
+        - name: poolmonitor
+          image: n8marshall/poolmonitor:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: poolmonitor-env
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
