@@ -44,11 +44,12 @@ func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 			return
 		}
 		lastRPMValue = rpmValue
-		logger.Debug("RPM status checked", "rpm", rpmValue)
+		logger.Debug("Updated RPM value", "rpm", rpmValue)
 	}
 }
 
 func CheckRPMStatus(client MQTT.Client) bool {
+	// Subscribe to the RPM topic to ensure the latest value is received
 	token := client.Subscribe(config.RPMTopic, 1, nil)
 	token.Wait()
 	if token.Error() != nil {
@@ -56,9 +57,10 @@ func CheckRPMStatus(client MQTT.Client) bool {
 		return false
 	}
 
-	time.Sleep(2 * time.Second) // Give time to receive the RPM status
+	// Wait a moment to ensure the message handler has processed the latest value
+	time.Sleep(2 * time.Second)
 
-	// Log the last RPM value
+	// Log the current RPM value
 	logger.Debug("RPM status checked", "rpm", lastRPMValue)
 	return lastRPMValue > 0 // Assuming RPM is above zero if the pump is running
 }
