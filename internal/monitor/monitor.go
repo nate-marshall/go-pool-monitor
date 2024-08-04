@@ -62,7 +62,7 @@ func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 }
 
 func CheckRPMStatus(client MQTT.Client) bool {
-	// Subscribe to the RPM topic to ensure the latest value is received
+	logger.Debug("Subscribing to RPM topic", "topic", config.RPMTopic)
 	token := client.Subscribe(config.RPMTopic, 1, nil)
 	token.Wait()
 	if token.Error() != nil {
