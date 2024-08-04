@@ -1,9 +1,8 @@
 package monitor
 
 import (
+	"context"
 	"encoding/json"
-	"strconv"
-	"strings"
 	"time"
 
 	"pool-monitor/internal/config"
@@ -21,7 +20,7 @@ var (
 	lastRPMValue  int
 )
 
-// Struct to unmarshal the RPM payload if it's in JSON format
+// Struct to unmarshal the RPM payload
 type RPMPayload struct {
 	RPM int `json:"rpm"`
 }
@@ -45,54 +44,50 @@ func MessageHandler(client MQTT.Client, msg MQTT.Message) {
 		}
 	case config.RPMTopic:
 		logger.Debug("Received RPM message", "payload", payload) // Log the raw RPM payload
-		rpmValue, err := strconv.Atoi(strings.TrimSpace(payload))
+		var rpmPayload RPMPayload
+		err := json.Unmarshal([]byte(payload), &rpmPayload)
 		if err != nil {
-			// Try parsing as JSON if the plain int parsing fails
-			var rpmPayload RPMPayload
-			err = json.Unmarshal([]byte(payload), &rpmPayload)
-			if err != nil {
-				logger.Error("Error parsing RPM value", "error", err, "payload", payload)
-				return
-			}
-			rpmValue = rpmPayload.RPM
+			logger.Error("Error parsing RPM value", "error", err, "payload", payload)
+			return
 		}
-		lastRPMValue = rpmValue
-		logger.Debug("Updated RPM value", "rpm", rpmValue)
+		lastRPMValue = rpmPayload.RPM
+		logger.Debug("Updated RPM value", "rpm", lastRPMValue)
 	}
 }
 
-func CheckRPMStatus(client MQTT.Client) bool {
+func MonitorLevels(ctx context.Context, client MQTT.Client) {
+	// Subscribe to the RPM topic once and maintain the subscription
 	logger.Debug("Subscribing to RPM topic", "topic", config.RPMTopic)
-	token := client.Subscribe(config.RPMTopic, 1, nil)
+	token := client.Subscribe(config.RPMTopic, 1, MessageHandler)
 	token.Wait()
 	if token.Error() != nil {
 		logger.Error("Error subscribing to topic", "topic", config.RPMTopic, "error", token.Error())
-		return false
+		return
 	}
 
-	// Wait a moment to ensure the message handler has processed the latest value
-	time.Sleep(2 * time.Second)
-
-	// Log the current RPM value
-	logger.Debug("RPM status checked", "rpm", lastRPMValue)
-	return lastRPMValue > 0 // Assuming RPM is above zero if the pump is running
-}
-
-func MonitorLevels(client MQTT.Client) {
 	ticker := time.NewTicker(10 * time.Second)
-	for range ticker.C {
-		if !CheckRPMStatus(client) {
-			logger.Warn("Pool pump is not running")
-			continue
-		}
+	defer ticker.Stop()
 
-		if time.Since(lastORPChange) > config.AlertInterval {
-			logger.Warn("ORP level has not changed for the alert interval")
-			alert.SendAlert("ORP level has not changed for the alert interval")
-		}
-		if time.Since(lastPHChange) > config.AlertInterval {
-			logger.Warn("pH level has not changed for the alert interval")
-			alert.SendAlert("pH level has not changed for the alert interval")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Shutting down monitor...")
+			return
+		case <-ticker.C:
+			if lastRPMValue == 0 {
+				logger.Warn("Pool pump is not running")
+			} else {
+				logger.Debug("RPM status checked", "rpm", lastRPMValue)
+			}
+
+			if time.Since(lastORPChange) > config.AlertInterval {
+				logger.Warn("ORP level has not changed for the alert interval")
+				alert.SendAlert("ORP level has not changed for the alert interval")
+			}
+			if time.Since(lastPHChange) > config.AlertInterval {
+				logger.Warn("pH level has not changed for the alert interval")
+				alert.SendAlert("pH level has not changed for the alert interval")
+			}
 		}
 	}
 }
